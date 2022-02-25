@@ -47,11 +47,13 @@ combined_sf_shiny <- left_join(county_sf, pov_con_data, by = 'county') %>%
   summarize(mean_gm_result = mean(mean_gm_result))
 
 ## Reading in data that contains well information (id, location, depth, etc.)
-combined_well_shiny_sf <- st_read(here('data','combined_well_shiny_sf.shp')) %>% 
-  rename(well_type = well_us,
-         mean_water_depth = mn_wtr_,
-         povall_2019 = pv_2019,
-         pctpovall_2019 = pc_2019)
+combined_well_shiny_sf <- rbind(
+  read_csv(here('data','combined_well_1.csv')),
+  read_csv(here('data','combined_well_2.csv')),
+  read_csv(here('data','combined_well_3.csv'))) %>% 
+  st_as_sf(coords = c('longitude','latitude'), crs = 4326) %>% 
+  filter(mean_water_depth >= 0 & mean_water_depth < 1500) %>% 
+  rename(well_type = well_use)
 
 # ## Reading in well location data
 # well_locations <- read_csv(here('data','well_locations.csv')) %>% 
