@@ -24,3 +24,15 @@ ggplot(mapdata,aes(x=x,y=y,group=group)) +
   geom_polygon(aes(fill=mean_gm_result)) +
   coord_fixed(ratio = 1) 
 
+
+
+## Tmap test
+
+
+tm_shape(shp = combined_sf_shiny) +
+  tm_borders(col = 'gray') +
+  tm_fill(col = 'mean_gm_result',
+          title = "Mean Contaminant Concentration",
+          style = 'cont',
+          popup.vars = c("Population in Poverty (2019)"="povall_2019","Percent of Population in Poverty (2019)"="pctpovall_2019"),
+          popup.format = list()) 

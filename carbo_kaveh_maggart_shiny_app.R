@@ -19,6 +19,16 @@ df <- read_csv(here("data","filtered_data_2000_2020.csv"), col_names = TRUE) %>%
     gm_chemical_name == "Potassium (mg/l)"  ~ "Potassium",
     gm_chemical_name == "Nitrate as N (mg/l)" ~ "Nitrate"))
 
+      ### Creating ALL level for County
+      df_all_counties <- df %>% 
+        group_by(gm_chemical_name,date,year) %>% 
+        summarise(mean_gm_result=mean(mean_gm_result)) %>% 
+        mutate(gm_gis_county = "All", .before = "gm_chemical_name")
+      ### Combining df and all
+      df <- df_all_counties %>% 
+        rbind(df)
+
+
 ## Map data
 map <- us_map("counties",
               include = c("CA")) %>% 
@@ -54,6 +64,10 @@ combined_well_shiny_sf <- rbind(
   st_as_sf(coords = c('longitude','latitude'), crs = 4326) %>% 
   filter(mean_water_depth >= 0 & mean_water_depth < 1500) %>% 
   rename(well_type = well_use)
+
+# Reading water level data for temporal series
+
+water_level_ts <- read_csv(here("data","waterlevel_series.csv"), col_names = TRUE) 
 
 # ## Reading in well location data
 # well_locations <- read_csv(here('data','well_locations.csv')) %>% 
@@ -175,7 +189,10 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                                            value = c(min(df$date),max(df$date)),
                                            timeFormat = "%m/%Y",
                                            ticks = F
-                               ) # End sliderInput
+                               ), # End sliderInput
+                               
+                               checkboxInput("include_fit","Include trend",FALSE
+                               ) # end checkbox
                                
                              ), # End of sidebarPanel
                              mainPanel(
@@ -220,6 +237,52 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                            ) # End of sidebarLayout
                   ), # End of tabPanel map
                   
+                  tabPanel("Groundwater level evolution",fluid = TRUE, icon = icon("chart-area"),
+                           fluidRow(
+                             column(
+                               p("This tool explores groundwater levels evolution across California counties.
+              The interface allows the user to select county of interest.
+                The resulting figure explores monthly averages ground water levels of the selected county throughout time given the selected constraints.",
+                                 style="text-align:justify;color:black;padding:15px;border-radius:5px; width: 1250px; align: center"),
+                               width=4)
+                           ),
+                           sidebarLayout(
+                             sidebarPanel(
+                               "What do you want to represent?",
+                               br(),
+                               hr(),
+                               selectInput(inputId = "pick_county_evol",
+                                           label = "Select county",
+                                           choices = unique(water_level_ts$county_name),  # CHANGE VARIABLE NAME FOR COUNTIES
+                                           selected = "50 Free"
+                               ),  # End selectInput
+                               
+                               selectInput(inputId = "pick_use_evol",
+                                           label = "Select well use",
+                                           choices = unique(water_level_ts$well_use),  # CHANGE VARIABLE NAME FOR COUNTIES
+                                           selected = "50 Free"
+                               ),  # End selectInput
+                               
+                               sliderInput(inputId = "pick_range_evol",
+                                           label = "Time range",
+                                           min = min(water_level_ts$date),  # MAKE SURE THE DATE VARIABLE HAS THE SAME NAME. OTHERWISE YOU'LL HAVE TO CHANGE IT
+                                           max = max(water_level_ts$date),
+                                           value = c(min(water_level_ts$date),max(water_level_ts$date)),
+                                           timeFormat = "%m/%Y",
+                                           ticks = F
+                               ),  # End sliderInput
+                               
+                               checkboxInput("pick_trend","Include trend",FALSE
+                               ), # end checkbox
+                               
+                             ),  # End of sidebarPanel
+                             mainPanel(
+                               "Groundwater level evolution",
+                               plotOutput("gw_evol_plot")
+                             )  # End of mainPanel
+                           )  # End of sidebarLayout
+                  ),  # End of tabPanel groundwater level evolution
+                  
                   tabPanel("Groundwater Level Map",fluid = TRUE, icon = icon("map"),
                            fluidRow(
                              column(
@@ -252,42 +315,6 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                              ) # End of mainPanel
                            ) # End of sidebarLayout
                   ), 
-                  
-             #      tabPanel("Groundwater level evolution",fluid = TRUE, icon = icon("chart-area"),
-             #               fluidRow(
-             #                 column(
-             #                   p("This tool explores groundwater levels evolution across California counties.
-             # The interface allows the user to select county of interest.
-             #   The resulting figure explores monthly averages ground water levels of the selected county throughout time given the selected constraints.",
-             #                     style="text-align:justify;color:black;padding:15px;border-radius:5px; width: 1250px; align: center"),
-             #                   width=4)
-             #               ),
-             #               sidebarLayout(
-             #                 sidebarPanel(
-             #                   "Groundwater level evolution:",
-             #                   br(),
-             #                   hr(),
-             #                   selectInput(inputId = "pick_county_evol",
-             #                               label = "Select County",
-             #                               choices = unique(combined_well$county), # CHANGE VARIABLE NAME FOR COUNTIES
-             #                               selected = "50 Free"
-             #                   ), # End selectInput
-             #                   
-             #                   sliderInput(inputId = "pick_range_evol",
-             #                               label = "Time range",
-             #                               min = min(combined_well$year), # MAKE SURE THE DATE VARIABLE HAS THE SAME NAME. OTHERWISE YOU'LL HAVE TO CHANGE IT
-             #                               max = max(combined_well$year),
-             #                               value = c(min(combined_well$year),max(combined_well$year)),
-             #                               ticks = F
-             #                   ) # End sliderInput
-             #                   
-             #                 ), # End of sidebarPanel
-             #                 mainPanel(
-             #                   "Contaminant Temporal Series",
-             #                   plotOutput("gw_evol_plot")
-             #                 ) # End of mainPanel
-             #               ) # End of sidebarLayout
-             #      ), # End of tabPanel groundwater level evolution
                   
                   tabPanel("Contaminant Statistics", fluid = T, icon = icon("table"),
                            fluidRow(
@@ -349,15 +376,20 @@ server <- function(input,output) {
   }) # end gw_reactive
   
   ### Creating the plot
-  output$gw_plot <- renderPlot(
-    ggplot(data=gw_reactive(),aes(x=date,y=mean_gm_result)) +
+  output$gw_plot <- renderPlot({
+    p1 <- ggplot(data=gw_reactive(),aes(x=date,y=mean_gm_result)) +
       geom_area( fill="#FBC7D4", alpha=0.4) +
       geom_line(color="#f6809d", size=1) +
       geom_point(size=1, color="#f6809d") +
       labs(y ="mg/l", x = "Years") +
       theme_minimal() +
       labs(caption = "Data from CA State Water Resources Control Board.")
-  ) # end output$gw_plot
+    
+    if (input$include_fit) {
+      p1 <- p1 + geom_smooth(se=FALSE, color="brown3")
+    }
+    p1
+  }) # end output$gw_plot
   
   ## Contaminant Map 
   map_reactive_con <- reactive({
@@ -418,21 +450,29 @@ server <- function(input,output) {
               popup.format = list())
   }) # end output$gw_map_con
   
-  # ## Groundwater level evolution
-  # gw_level_reactive <- reactive({
-  #   df %>% 
-  #     filter(county %in% input$pick_county_evol) %>% # CHANGE VARIABLE NAME INCLUDED IN FILTER
-  #     filter(year() >= input$pick_range_evol[1]) %>%
-  #     filter(year <= input$pick_range_evol[2])
-  # }) # end gw_evol_plot
-  # 
-  # output$gw_evol_plot <- renderPlot(
-  #   ggplot(data=gw_level_reactive(),aes(x=year,y=-mean_depth)) +  # CHANGE VARIABLE NAME FOR THE MONTHLY MEAN GROUNDWATER LEVEL VALUES
-  #     geom_area( fill="#69b3a2", alpha=0.4) +
-  #     geom_line(color="#69b3a2", size=1) +
-  #     geom_point(size=1, color="#69b3a2") +
-  #     labs(y ="Depth to water table (ft)", x = "Year") # MAKE SURE ABOUT THE UNITS (meters¿?¿?)
-  # ) # end output$gw_evol_plot
+  ## Groundwater level evolution
+   gw_level_reactive <- reactive({
+     water_level_ts %>% 
+       filter(county_name %in% input$pick_county_evol,
+              well_use %in% input$pick_use_evol) %>% 
+       filter(date >= input$pick_range_evol[1]) %>%
+       filter(date <= input$pick_range_evol[2])
+   }) # end gw_evol_plot
+   
+   output$gw_evol_plot <- renderPlot({
+       p2 <- ggplot(data=gw_level_reactive(),aes(x=date,y=mean_gse_gwe)) +
+         geom_ribbon(aes(x = date, ymin = max(mean_gse_gwe), ymax = mean_gse_gwe),fill="dodgerblue2", alpha=0.4) +
+         geom_line(color="dodgerblue2", size=0.5) +
+         geom_point(size=0.5, color="dodgerblue2") +
+         labs(y ="Depth to water table (ft)", x = "Year") +
+         scale_y_continuous(trans = "reverse")
+       # When the "fit" checkbox is checked, add a line
+       # of best fit
+       if (input$pick_trend) {
+         p2 <- p2 + geom_smooth(se=FALSE)
+       }
+       p2
+   }) # end output$gw_evol_plot
 }
 
 shinyApp(ui=ui, server=server)
