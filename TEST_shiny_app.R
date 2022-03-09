@@ -128,9 +128,9 @@ ui <- fluidPage(theme=my_theme,
                                "Contaminant Temporal Series",
                                
                                tabsetPanel(
-                                 tabPanel("Original time series", plotOutput("gw_plot")), 
-                                 tabPanel("Seasonal", plotOutput("gw_seasonplot")),
-                                 tabPanel("Annual", plotOutput("gw_annualplot"))
+                                 tabPanel("Original time series", plotOutput("gw_contaminant_plot")), 
+                                 tabPanel("Seasonal", plotOutput("gw_contaminant_seasonplot")),
+                                 tabPanel("Annual", plotOutput("gw_contaminant_annualplot"))
                                ) # End tabsetPanel
                              ) # End of mainPanel
                            ) # End of sidebarLayout
@@ -181,9 +181,9 @@ ui <- fluidPage(theme=my_theme,
                                "Groundwater level evolution",
                                
                                tabsetPanel(
-                                 tabPanel("Original time series", plotOutput("gw_evol_plot")), 
-                                 tabPanel("Seasonal", plotOutput("gw_evol_seasonplot")),
-                                 tabPanel("Annual", plotOutput("gw_evol_annualplot"))
+                                 tabPanel("Original time series", plotOutput("gw_level_plot")), 
+                                 tabPanel("Seasonal", plotOutput("gw_level_seasonplot")),
+                                 tabPanel("Annual", plotOutput("gw_level_annualplot"))
                                ) # End tabsetPanel
                              )  # End of mainPanel
                            )  # End of sidebarLayout
@@ -195,18 +195,22 @@ ui <- fluidPage(theme=my_theme,
 server <- function(input,output) {
   
   ## Contaminants evolution
-  ### Original series
-  gw_reactive <- reactive({
+  ## -------------------------------------------------
+  
+  ### Contaminants original time series
+  
+  #### Creating the gw_contaminant_plot_reactive
+  gw_contaminant_plot_reactive <- reactive({
     df %>% 
       filter(gm_chemical_name %in% input$pick_pollutant,
              gm_gis_county %in% input$pick_county) %>% 
       filter(date >= input$pick_range[1]) %>%
       filter(date <= input$pick_range[2])
-  }) # end gw_reactive
+  }) # end gw_contaminant_plot_reactive
   
-  ### Creating the plot
-  output$gw_plot <- renderPlot({
-    p1 <- ggplot(data=gw_reactive(),aes(x=date,y=mean_gm_result)) +
+  #### Creating the gw_contaminant_plot
+  output$gw_contaminant_plot <- renderPlot({
+    p <- ggplot(data=gw_contaminant_plot_reactive(),aes(x=date,y=mean_gm_result)) +
       geom_ribbon(aes(x = date, ymin = min(mean_gm_result), ymax = mean_gm_result),fill="#FBC7D4", alpha=0.4) +
       geom_line(color="#f6809d", size=1) +
       geom_point(size=1, color="#f6809d") +
@@ -214,13 +218,16 @@ server <- function(input,output) {
       theme_minimal()
     
     if (input$include_fit) {
-      p1 <- p1 + geom_smooth(se=FALSE, color="brown3")
+      p <- p + geom_smooth(se=FALSE, color="brown3")
     }
-    p1
-  }) # end output$gw_plot
+    p
+  }) # end output$gw_contaminant_plot
 
-  ### Contaminant Seasonal data
-  gw_seasonal_reactive <- reactive({
+  
+  ### Contaminants seasonal time series
+  
+  #### Creating the gw_contaminant_seasonplot_reactive
+  gw_contaminant_seasonplot_reactive <- reactive({
     df %>% 
       filter(gm_chemical_name %in% input$pick_pollutant,
              gm_gis_county %in% input$pick_county) %>% 
@@ -232,37 +239,38 @@ server <- function(input,output) {
       summarize(monthly_mean = mean(mean_gm_result, na.rm = TRUE)) %>% 
       tsibble::fill_gaps()
     
-  }) # end gw_reactive
+  }) # end gw_contaminant_seasonplot_reactive
   
-  ### Creating the contaminant seasonal plot
-  output$gw_seasonplot <- renderPlot({
+  ### Creating the gw_contaminant_seasonplot
+  output$gw_contaminant_seasonplot <- renderPlot({
     
-    p6 <- gg_subseries(data=gw_seasonal_reactive(),y = monthly_mean) +
+    p1 <- gg_subseries(data=gw_contaminant_seasonplot_reactive(),y = monthly_mean) +
       theme_minimal() +
       labs(y = "mg/l",
            x="",
            title = paste("Time ranging from",
-                         min(gw_seasonal_reactive()$yr_mo),
+                         min(gw_contaminant_seasonplot_reactive()$yr_mo),
                          "to",
-                         max(gw_seasonal_reactive()$yr_mo))) +
+                         max(gw_contaminant_seasonplot_reactive()$yr_mo))) +
       theme(axis.text.x=element_blank())
     if (input$include_fit) {
-      p6 <- p6 + geom_smooth(se=FALSE)
+      p1 <- p1 + geom_smooth(se=FALSE)
     }
     
-    p7 <- gg_season(data=gw_seasonal_reactive(),y = monthly_mean) +
+    p2 <- gg_season(data=gw_contaminant_seasonplot_reactive(),y = monthly_mean) +
       theme_minimal() +
       labs(x = "Month",
            y = "mg/l",
            Color = "Years")
-    p6/p7 
+    p1/p2 
     
-  }) # end output$gw_evol_seasonplot
+  }) # end gw_contaminant_seasonplot
   
   
+  ### Contaminants annual time series
   
-  ## Groundwater polution annual level 
-  gw_annual_pollution_reactive <- reactive({
+  #### Creating the gw_contaminant_annualplot_reactive
+  gw_contaminant_annualplot_reactive <- reactive({
     
     df %>% 
       filter(gm_chemical_name %in% input$pick_pollutant,
@@ -275,37 +283,41 @@ server <- function(input,output) {
       summarize(annual_mean = mean(mean_gm_result, na.rm = TRUE)) %>% 
       tsibble::fill_gaps()
     
-  }) # end gw_annualplot
+  }) # end gw_contaminant_annualplot_reactive
   
-  output$gw_annualplot <- renderPlot({
+  #### Creating the gw_contaminant_annualplot
+  output$gw_contaminant_annualplot <- renderPlot({
     
-    p5 <- ggplot(data = gw_annual_pollution_reactive(),aes(x = yearly, y = annual_mean)) +
+    p <- ggplot(data = gw_contaminant_annualplot_reactive(),aes(x = yearly, y = annual_mean)) +
       geom_ribbon(aes( ymin = min(annual_mean), ymax = annual_mean),fill="#FBC7D4", alpha=0.4) +
       geom_line(color="#f6809d", size=1) +
       geom_point(size=1, color="#f6809d") +
       labs(y ="mg/l", x = "Year")
     
     if (input$include_fit) {
-      p5 <- p5 + geom_smooth(se=FALSE,color="brown3")
+      p <- p + geom_smooth(se=FALSE,color="brown3")
     }
-    p5
-  }) # end output$gw_annualplot
+    p
+  }) # end gw_contaminant_annualplot
   
   
+  ## Water level evolution
+  ## -------------------------------------------------
   
+  ### Water level original time series
   
-  
-  ## Groundwater level evolution
-   gw_level_reactive <- reactive({
+  #### Creating the gw_level_plot_reactive
+   gw_level_plot_reactive <- reactive({
      water_level_ts %>% 
        filter(county_name %in% input$pick_county_evol,
               well_use %in% input$pick_use_evol) %>% 
        filter(date >= input$pick_range_evol[1]) %>%
        filter(date <= input$pick_range_evol[2])
-   }) # end gw_evol_plot
-   
-   output$gw_evol_plot <- renderPlot({
-       p2 <- ggplot(data=gw_level_reactive(),aes(x=date,y=mean_gse_gwe)) +
+   }) # end gw_level_plot
+  
+  #### Creating the gw_level_plot
+   output$gw_level_plot <- renderPlot({
+       p <- ggplot(data=gw_level_plot_reactive(),aes(x=date,y=mean_gse_gwe)) +
          geom_ribbon(aes(x = date, ymin = max(mean_gse_gwe), ymax = mean_gse_gwe),fill="dodgerblue2", alpha=0.4) +
          geom_line(color="dodgerblue2", size=0.5) +
          geom_point(size=0.5, color="dodgerblue2") +
@@ -314,14 +326,16 @@ server <- function(input,output) {
        # When the "fit" checkbox is checked, add a line
        # of best fit
        if (input$pick_trend) {
-         p2 <- p2 + geom_smooth(se=FALSE)
+         p <- p + geom_smooth(se=FALSE)
        }
-       p2
-   }) # end output$gw_evol_plot
+       p
+   }) # end gw_level_plot
    
    
-   ## Groundwater seasonal level 
-   gw_seasonal_level_reactive <- reactive({
+   ### Water level seasonal series
+   
+   #### Creating the gw_level_plot_reactive
+   gw_level_seasonplot_reactive <- reactive({
      
      water_level_ts %>% 
        filter(county_name %in% input$pick_county_evol,
@@ -333,38 +347,41 @@ server <- function(input,output) {
        summarize(monthly_mean = mean(mean_gse_gwe, na.rm = TRUE)) %>% 
        tsibble::fill_gaps()
      
-   }) # end gw_evol_seasonplot
+   }) # end gw_level_plot_reactive
    
-   output$gw_evol_seasonplot <- renderPlot({
+   #### Creating the gw_level_seasonplot
+   output$gw_level_seasonplot <- renderPlot({
      
-     p3 <- gg_subseries(data=gw_seasonal_level_reactive(),y = monthly_mean) +
+     p1 <- gg_subseries(data=gw_level_seasonplot_reactive(),y = monthly_mean) +
        theme_minimal() +
        labs(y = "Depth to water table (ft)",
             x="",
             title = paste("Time ranging from",
-                          min(gw_seasonal_level_reactive()$yr_mo),
+                          min(gw_level_seasonplot_reactive()$yr_mo),
                           "to",
-                          max(gw_seasonal_level_reactive()$yr_mo))) +
+                          max(gw_level_seasonplot_reactive()$yr_mo))) +
        scale_y_continuous(trans = "reverse") +
        theme(axis.text.x=element_blank())
      if (input$pick_trend) {
-       p3 <- p3 + geom_smooth(se=FALSE)
+       p1 <- p1 + geom_smooth(se=FALSE)
      }
      
-     p4 <- gg_season(data=gw_seasonal_level_reactive(),y = monthly_mean) +
+     p2 <- gg_season(data=gw_level_seasonplot_reactive(),y = monthly_mean) +
        theme_minimal() +
        labs(x = "Month",
             y = "Depth to water table (ft)",
             Color = "Years") +
        scale_y_continuous(trans = "reverse")
      
-     p3/p4 
+     p1/p2 
      
-   }) # end output$gw_evol_seasonplot
+   }) # end gw_level_seasonplot
    
    
-   ## Groundwater annual level 
-   gw_annual_level_reactive <- reactive({
+   ### Water level annual series
+   
+   #### Creating the gw_level_plot_reactive
+   gw_level_annualplot_reactive <- reactive({
      
      water_level_ts %>% 
        filter(county_name %in% input$pick_county_evol,
@@ -376,11 +393,12 @@ server <- function(input,output) {
        summarize(annual_mean = mean(mean_gse_gwe, na.rm = TRUE)) %>% 
        tsibble::fill_gaps()
      
-   }) # end gw_evol_annualplot
+   }) # end gw_level_annualplot_reactive
    
-   output$gw_evol_annualplot <- renderPlot({
+   #### Creating the gw_level_annualplot
+   output$gw_level_annualplot <- renderPlot({
      
-     p5 <- ggplot(data = gw_annual_level_reactive(), aes(x = yearly, y = annual_mean)) +
+     p <- ggplot(data = gw_level_annualplot_reactive(), aes(x = yearly, y = annual_mean)) +
        geom_ribbon(aes(x = yearly, ymin = max(annual_mean), ymax = annual_mean),fill="dodgerblue2", alpha=0.4) +
        geom_line(color="dodgerblue2", size=0.5) +
        geom_point(size=0.5, color="dodgerblue2") +
@@ -388,10 +406,10 @@ server <- function(input,output) {
        scale_y_continuous(trans = "reverse")
      
      if (input$pick_trend) {
-       p5 <- p5 + geom_smooth(se=FALSE)
+       p <- p + geom_smooth(se=FALSE)
      }
-     p5
-   }) # end output$gw_evol_annualplot
+     p
+   }) # end of gw_level_annualplot
    
 }
 
