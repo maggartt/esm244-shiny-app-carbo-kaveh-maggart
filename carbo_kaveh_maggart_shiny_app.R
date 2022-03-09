@@ -8,6 +8,10 @@ library(bslib)
 library(tmap)
 library(janitor)
 library(sf)
+library(tsibble)
+library(lubridate)
+library(feasts)
+library(patchwork)
 
 # Data input
 # ----------------------
@@ -156,7 +160,7 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                            hr()
                   ),
                   
-                  tabPanel("Temporal series",fluid = TRUE, icon = icon("chart-area"),
+                  tabPanel("Contaminant temporal series",fluid = TRUE, icon = icon("chart-area"),
                            fluidRow(
                              column(
                                p("This tool explores groundwater contaminants across California counties. 
@@ -197,7 +201,12 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                              ), # End of sidebarPanel
                              mainPanel(
                                "Contaminant Temporal Series",
-                               plotOutput("gw_plot")
+                               
+                               tabsetPanel(
+                                 tabPanel("Original time series", plotOutput("gw_contaminant_plot")), 
+                                 tabPanel("Seasonal", plotOutput("gw_contaminant_seasonplot")),
+                                 tabPanel("Annual", plotOutput("gw_contaminant_annualplot"))
+                               ) # End tabsetPanel
                              ) # End of mainPanel
                            ) # End of sidebarLayout
                   ), # End of tabPanel Time Series
@@ -278,7 +287,12 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                              ),  # End of sidebarPanel
                              mainPanel(
                                "Groundwater level evolution",
-                               plotOutput("gw_evol_plot")
+                               
+                               tabsetPanel(
+                                 tabPanel("Original time series", plotOutput("gw_level_plot")), 
+                                 tabPanel("Seasonal", plotOutput("gw_level_seasonplot")),
+                                 tabPanel("Annual", plotOutput("gw_level_annualplot"))
+                               ) # End tabsetPanel
                              )  # End of mainPanel
                            )  # End of sidebarLayout
                   ),  # End of tabPanel groundwater level evolution
@@ -366,32 +380,118 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
 
 ## Start of the server
 server <- function(input,output) {
-  ## Time series reactive + plot
-  gw_reactive <- reactive({
+  
+  ## Contaminants evolution
+  ## -------------------------------------------------
+  
+  ### Contaminants original time series
+  
+  #### Creating the gw_contaminant_plot_reactive
+  gw_contaminant_plot_reactive <- reactive({
     df %>% 
       filter(gm_chemical_name %in% input$pick_pollutant,
              gm_gis_county %in% input$pick_county) %>% 
       filter(date >= input$pick_range[1]) %>%
       filter(date <= input$pick_range[2])
-  }) # end gw_reactive
+  }) # end gw_contaminant_plot_reactive
   
-  ### Creating the plot
-  output$gw_plot <- renderPlot({
-    p1 <- ggplot(data=gw_reactive(),aes(x=date,y=mean_gm_result)) +
-      geom_area( fill="#FBC7D4", alpha=0.4) +
+  #### Creating the gw_contaminant_plot
+  output$gw_contaminant_plot <- renderPlot({
+    p <- ggplot(data=gw_contaminant_plot_reactive(),aes(x=date,y=mean_gm_result)) +
+      geom_ribbon(aes(x = date, ymin = min(mean_gm_result), ymax = mean_gm_result),fill="#FBC7D4", alpha=0.4) +
       geom_line(color="#f6809d", size=1) +
       geom_point(size=1, color="#f6809d") +
       labs(y ="mg/l", x = "Years") +
-      theme_minimal() +
-      labs(caption = "Data from CA State Water Resources Control Board.")
+      theme_minimal()
     
     if (input$include_fit) {
-      p1 <- p1 + geom_smooth(se=FALSE, color="brown3")
+      p <- p + geom_smooth(se=FALSE, color="brown3")
     }
-    p1
-  }) # end output$gw_plot
+    p
+  }) # end output$gw_contaminant_plot
+  
+  
+  ### Contaminants seasonal time series
+  
+  #### Creating the gw_contaminant_seasonplot_reactive
+  gw_contaminant_seasonplot_reactive <- reactive({
+    df %>% 
+      filter(gm_chemical_name %in% input$pick_pollutant,
+             gm_gis_county %in% input$pick_county) %>% 
+      filter(date >= input$pick_range[1]) %>%
+      filter(date <= input$pick_range[2]) %>%
+      ungroup() %>% 
+      as_tsibble(key = NULL, index = date) %>% 
+      index_by(yr_mo = ~yearmonth(.)) %>% 
+      summarize(monthly_mean = mean(mean_gm_result, na.rm = TRUE)) %>% 
+      tsibble::fill_gaps()
+    
+  }) # end gw_contaminant_seasonplot_reactive
+  
+  ### Creating the gw_contaminant_seasonplot
+  output$gw_contaminant_seasonplot <- renderPlot({
+    
+    p1 <- gg_subseries(data=gw_contaminant_seasonplot_reactive(),y = monthly_mean) +
+      theme_minimal() +
+      labs(y = "mg/l",
+           x="",
+           title = paste("Time ranging from",
+                         min(gw_contaminant_seasonplot_reactive()$yr_mo),
+                         "to",
+                         max(gw_contaminant_seasonplot_reactive()$yr_mo))) +
+      theme(axis.text.x=element_blank())
+    if (input$include_fit) {
+      p1 <- p1 + geom_smooth(se=FALSE)
+    }
+    
+    p2 <- gg_season(data=gw_contaminant_seasonplot_reactive(),y = monthly_mean) +
+      theme_minimal() +
+      labs(x = "Month",
+           y = "mg/l",
+           Color = "Years")
+    p1/p2 
+    
+  }) # end gw_contaminant_seasonplot
+  
+  
+  ### Contaminants annual time series
+  
+  #### Creating the gw_contaminant_annualplot_reactive
+  gw_contaminant_annualplot_reactive <- reactive({
+    
+    df %>% 
+      filter(gm_chemical_name %in% input$pick_pollutant,
+             gm_gis_county %in% input$pick_county) %>% 
+      filter(date >= input$pick_range[1]) %>%
+      filter(date <= input$pick_range[2]) %>%
+      ungroup() %>% 
+      as_tsibble(key = NULL, index = date) %>% 
+      index_by(yearly = ~year(.)) %>% 
+      summarize(annual_mean = mean(mean_gm_result, na.rm = TRUE)) %>% 
+      tsibble::fill_gaps()
+    
+  }) # end gw_contaminant_annualplot_reactive
+  
+  #### Creating the gw_contaminant_annualplot
+  output$gw_contaminant_annualplot <- renderPlot({
+    
+    p <- ggplot(data = gw_contaminant_annualplot_reactive(),aes(x = yearly, y = annual_mean)) +
+      geom_ribbon(aes( ymin = min(annual_mean), ymax = annual_mean),fill="#FBC7D4", alpha=0.4) +
+      geom_line(color="#f6809d", size=1) +
+      geom_point(size=1, color="#f6809d") +
+      labs(y ="mg/l", x = "Year")
+    
+    if (input$include_fit) {
+      p <- p + geom_smooth(se=FALSE,color="brown3")
+    }
+    p
+  }) # end gw_contaminant_annualplot
+  
+  
   
   ## Contaminant Map 
+  ## -------------------------------------------------
+
   map_reactive_con <- reactive({
     combined_sf_shiny %>% 
       filter(gm_chemical_name %in% input$pick_pollutant_map) %>% 
@@ -450,29 +550,116 @@ server <- function(input,output) {
               popup.format = list())
   }) # end output$gw_map_con
   
-  ## Groundwater level evolution
-   gw_level_reactive <- reactive({
-     water_level_ts %>% 
-       filter(county_name %in% input$pick_county_evol,
-              well_use %in% input$pick_use_evol) %>% 
-       filter(date >= input$pick_range_evol[1]) %>%
-       filter(date <= input$pick_range_evol[2])
-   }) # end gw_evol_plot
-   
-   output$gw_evol_plot <- renderPlot({
-       p2 <- ggplot(data=gw_level_reactive(),aes(x=date,y=mean_gse_gwe)) +
-         geom_ribbon(aes(x = date, ymin = max(mean_gse_gwe), ymax = mean_gse_gwe),fill="dodgerblue2", alpha=0.4) +
-         geom_line(color="dodgerblue2", size=0.5) +
-         geom_point(size=0.5, color="dodgerblue2") +
-         labs(y ="Depth to water table (ft)", x = "Year") +
-         scale_y_continuous(trans = "reverse")
-       # When the "fit" checkbox is checked, add a line
-       # of best fit
-       if (input$pick_trend) {
-         p2 <- p2 + geom_smooth(se=FALSE)
-       }
-       p2
-   }) # end output$gw_evol_plot
+  
+  ## Water level evolution
+  ## -------------------------------------------------
+  
+  ### Water level original time series
+  
+  #### Creating the gw_level_plot_reactive
+  gw_level_plot_reactive <- reactive({
+    water_level_ts %>% 
+      filter(county_name %in% input$pick_county_evol,
+             well_use %in% input$pick_use_evol) %>% 
+      filter(date >= input$pick_range_evol[1]) %>%
+      filter(date <= input$pick_range_evol[2])
+  }) # end gw_level_plot
+  
+  #### Creating the gw_level_plot
+  output$gw_level_plot <- renderPlot({
+    p <- ggplot(data=gw_level_plot_reactive(),aes(x=date,y=mean_gse_gwe)) +
+      geom_ribbon(aes(x = date, ymin = max(mean_gse_gwe), ymax = mean_gse_gwe),fill="dodgerblue2", alpha=0.4) +
+      geom_line(color="dodgerblue2", size=0.5) +
+      geom_point(size=0.5, color="dodgerblue2") +
+      labs(y ="Depth to water table (ft)", x = "Year") +
+      scale_y_continuous(trans = "reverse")
+    # When the "fit" checkbox is checked, add a line
+    # of best fit
+    if (input$pick_trend) {
+      p <- p + geom_smooth(se=FALSE)
+    }
+    p
+  }) # end gw_level_plot
+  
+  
+  ### Water level seasonal series
+  
+  #### Creating the gw_level_plot_reactive
+  gw_level_seasonplot_reactive <- reactive({
+    
+    water_level_ts %>% 
+      filter(county_name %in% input$pick_county_evol,
+             well_use %in% input$pick_use_evol) %>% 
+      filter(date >= input$pick_range_evol[1]) %>%
+      filter(date <= input$pick_range_evol[2]) %>% 
+      as_tsibble(key = NULL, index = date) %>% 
+      index_by(yr_mo = ~yearmonth(.)) %>% 
+      summarize(monthly_mean = mean(mean_gse_gwe, na.rm = TRUE)) %>% 
+      tsibble::fill_gaps()
+    
+  }) # end gw_level_plot_reactive
+  
+  #### Creating the gw_level_seasonplot
+  output$gw_level_seasonplot <- renderPlot({
+    
+    p1 <- gg_subseries(data=gw_level_seasonplot_reactive(),y = monthly_mean) +
+      theme_minimal() +
+      labs(y = "Depth to water table (ft)",
+           x="",
+           title = paste("Time ranging from",
+                         min(gw_level_seasonplot_reactive()$yr_mo),
+                         "to",
+                         max(gw_level_seasonplot_reactive()$yr_mo))) +
+      scale_y_continuous(trans = "reverse") +
+      theme(axis.text.x=element_blank())
+    if (input$pick_trend) {
+      p1 <- p1 + geom_smooth(se=FALSE)
+    }
+    
+    p2 <- gg_season(data=gw_level_seasonplot_reactive(),y = monthly_mean) +
+      theme_minimal() +
+      labs(x = "Month",
+           y = "Depth to water table (ft)",
+           Color = "Years") +
+      scale_y_continuous(trans = "reverse")
+    
+    p1/p2 
+    
+  }) # end gw_level_seasonplot
+  
+  
+  ### Water level annual series
+  
+  #### Creating the gw_level_plot_reactive
+  gw_level_annualplot_reactive <- reactive({
+    
+    water_level_ts %>% 
+      filter(county_name %in% input$pick_county_evol,
+             well_use %in% input$pick_use_evol) %>% 
+      filter(date >= input$pick_range_evol[1]) %>%
+      filter(date <= input$pick_range_evol[2]) %>% 
+      as_tsibble(key = NULL, index = date) %>% 
+      index_by(yearly = ~year(.)) %>%
+      summarize(annual_mean = mean(mean_gse_gwe, na.rm = TRUE)) %>% 
+      tsibble::fill_gaps()
+    
+  }) # end gw_level_annualplot_reactive
+  
+  #### Creating the gw_level_annualplot
+  output$gw_level_annualplot <- renderPlot({
+    
+    p <- ggplot(data = gw_level_annualplot_reactive(), aes(x = yearly, y = annual_mean)) +
+      geom_ribbon(aes(x = yearly, ymin = max(annual_mean), ymax = annual_mean),fill="dodgerblue2", alpha=0.4) +
+      geom_line(color="dodgerblue2", size=0.5) +
+      geom_point(size=0.5, color="dodgerblue2") +
+      labs(y ="Depth to water table (ft)", x = "Year") +
+      scale_y_continuous(trans = "reverse")
+    
+    if (input$pick_trend) {
+      p <- p + geom_smooth(se=FALSE)
+    }
+    p
+  }) # end of gw_level_annualplot
 }
 
 shinyApp(ui=ui, server=server)
