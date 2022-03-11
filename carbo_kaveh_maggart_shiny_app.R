@@ -38,7 +38,7 @@ map <- us_map("counties",
               include = c("CA")) %>% 
   mutate(county = str_remove_all(county, " County"))
 
-## Dataframe 
+## Dataframe for Contaminant statistics
 df1 <- df %>% 
   mutate(county = str_to_title(gm_gis_county), .keep="unused") %>% 
   group_by(county, gm_chemical_name, year) %>% 
@@ -160,7 +160,7 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                            hr()
                   ),
                   
-                  tabPanel("Contaminant temporal series",fluid = TRUE, icon = icon("chart-area"),
+                  tabPanel("Contaminant levels",fluid = TRUE, icon = icon("chart-area"),
                            fluidRow(
                              column(
                                p("This tool explores groundwater contaminants across California counties. 
@@ -199,6 +199,7 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                                ) # end checkbox
                                
                              ), # End of sidebarPanel
+                             
                              mainPanel(
                                "Contaminant Temporal Series",
                                
@@ -211,7 +212,7 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                            ) # End of sidebarLayout
                   ), # End of tabPanel Time Series
                   
-                  tabPanel("Contaminant Map",fluid = TRUE, icon = icon("map"),
+                  tabPanel("Contaminant map",fluid = TRUE, icon = icon("map"),
                            fluidRow(
                              column(
                                p("This tool explores groundwater contaminants across California counties. 
@@ -246,7 +247,7 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                            ) # End of sidebarLayout
                   ), # End of tabPanel map
                   
-                  tabPanel("Groundwater level evolution",fluid = TRUE, icon = icon("chart-area"),
+                  tabPanel("Groundwater level",fluid = TRUE, icon = icon("chart-area"),
                            fluidRow(
                              column(
                                p("This tool explores groundwater levels evolution across California counties.
@@ -297,7 +298,7 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                            )  # End of sidebarLayout
                   ),  # End of tabPanel groundwater level evolution
                   
-                  tabPanel("Groundwater Level Map",fluid = TRUE, icon = icon("map"),
+                  tabPanel("Groundwater map",fluid = TRUE, icon = icon("map"),
                            fluidRow(
                              column(
                                p("This tool explores groundwater levels across California counties. 
@@ -340,13 +341,13 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                                "What do you want to represent?",
                                br(),
                                hr(),
-                               selectInput(inputId = "pick_county",
+                               selectInput(inputId = "pick_county_table",
                                            label = "Select County",
                                            choices = unique(df$gm_gis_county),
                                            selected = "50 Free"
                                ), # End selectInput
                                
-                               selectInput(inputId = "pick_year", 
+                               selectInput(inputId = "pick_year_table", 
                                            label = ("Select Year"), 
                                            choices = list("Year" = c(min(df$year):max(df$year))),
                                            selected = 1),
@@ -355,7 +356,7 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                                fluidRow(column(3, verbatimTextOutput("value"))
                                ), # end selectInput fpr year
                                
-                               checkboxGroupInput(inputId = "pick_contaminant",
+                               checkboxGroupInput(inputId = "pick_contaminant_table",
                                                   label = "Contaminant",
                                                   choices = c("Bicarbonate Alkalinity" = "Bicarbonate Alkalinity", 
                                                               "Potassium" = "Potassium", 
@@ -513,9 +514,9 @@ server <- function(input,output) {
   ### the ui and reactives aren't interacting :/
   ca_stat <- reactive({
     df1 %>%
-      filter(county == input$pick_county,
-             year == input$pick_year,
-             gm_chemical_name %in% input$pick_contaminant)
+      filter(county == input$pick_county_table,
+             year == input$pick_year_table,
+             gm_chemical_name %in% input$pick_contaminant_table)
   }) # end ca_stat reactive
   
   ### Creating the table

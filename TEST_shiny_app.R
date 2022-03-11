@@ -45,6 +45,15 @@ test <- df %>%
   tsibble::fill_gaps()
 
 
+###Create mean for chemical by county and year
+stat <- read_csv(here("data","filtered_data_2000_2020.csv"), col_names = TRUE) %>%
+  mutate(gm_chemical_name = case_when(
+    gm_chemical_name == "Bicarbonate Alkalinity (mg/l)" ~ "Bicarbonate Alkalinity",
+    gm_chemical_name == "Potassium (mg/l)"  ~ "Potassium",
+    gm_chemical_name == "Nitrate as N (mg/l)" ~ "Nitrate")) %>%
+  group_by(gm_chemical_name, year, gm_gis_county) %>%
+  summarise(mean = mean(mean_gm_result)) %>%
+  select(gm_chemical_name, gm_gis_county, year, mean)
 
 # Reading water level data for temporal series
 
@@ -82,8 +91,8 @@ my_theme <- bs_theme(
 )
 
 ui <- fluidPage(theme=my_theme,
-                navbarPage(
-                  "Groundwater California",  # Title
+                navbarPage( "Groundwater \n California",
+                    # Title
                   
                   tabPanel("Contaminant temporal series",fluid = TRUE, icon = icon("chart-area"),
                            fluidRow(
@@ -189,7 +198,54 @@ ui <- fluidPage(theme=my_theme,
                            )  # End of sidebarLayout
                   ),  # End of tabPanel groundwater level evolution
                  
-                )) #end of navbarPage
+                  tabPanel("Contaminant Statistics", fluid = T, icon = icon("table"),
+                           fluidRow(
+                             p("This table shows general statistics for each pollutant in a selected county at any time range.",
+                               style="text-align:justify;color:black;padding:15px;border-radius:5px;align:center;width:1250"),
+                           ),
+                           sidebarLayout(
+                             sidebarPanel(
+                               "What do you want to represent?",
+                               br(),
+                               hr(),
+                               selectInput(inputId = "pick_county",
+                                           label = "Select County",
+                                           choices = unique(stat$gm_gis_county),
+                                           selected = "50 Free"
+                               ), # End selectInput
+                               
+                               selectInput(inputId = "pick_year",
+                                           label = ("Select Year"),
+                                           choices = list("Year" = c(min(stat$year):max(stat$year))),
+                                           selected = 1),
+                               
+                               hr(),
+                               fluidRow(column(3, verbatimTextOutput("value"))
+                               ), # end selectInput fpr year
+                               
+                               checkboxGroupInput(inputId = "pick_contaminant",
+                                                  label = "Contaminant",
+                                                  choices = c("Bicarbonate Alkalinity" = "Bicarbonate Alkalinity",
+                                                              "Potassium" = "Potassium",
+                                                              "Nitrate" = "Nitrate"),
+                                                  selected = c("Bicarbonate Alkalinity", "Potassium", "Nitrate")
+                                                  
+                               ), # end checkboxGroup
+                               
+                               
+                             ), # End of sidebarPanel
+                             mainPanel(
+                               column(
+                                 "California Contaminant Statistics",
+                                 tableOutput(outputId ="gw_stat"), width = 8
+                               ) # End of mainPanel
+                             ) # End of sidebarLayout
+                           ) # End of tabPanel statistics
+                           
+                  ) # End of tabPanel
+                  
+                ) #end of navbarPage
+                ) 
 
 ## Start of the server
 server <- function(input,output) {
@@ -410,6 +466,24 @@ server <- function(input,output) {
      }
      p
    }) # end of gw_level_annualplot
+   
+   ## Statistic table
+   ## -------------------------------------------------
+   ca_stat <- reactive({
+     stat %>%
+       filter(gm_gis_county == input$pick_county) %>%
+       filter(year == input$pick_year) %>%
+       filter(gm_chemical_name %in% input$pick_contaminant)
+   }) # end ca_stat reactive
+   
+   ### Creating the table
+   output$gw_stat <- renderTable({
+     ca_stat() %>%
+       group_by(gm_chemical_name) %>%
+       summarise(mean) %>%
+       rename("Chemical Name" = "gm_chemical_name",
+              "Mean Concentration (mg/L)" = "mean")
+   }) ### end gw_stat
    
 }
 
