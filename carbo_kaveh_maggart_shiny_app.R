@@ -109,7 +109,7 @@ ui <- fluidPage(theme=my_theme,
                   "Groundwater California",  # Title
                   
                   tabPanel("Home",fluid = TRUE, icon = icon("home"),
-                           titlePanel(h2("California Groundwater Contamination", align = "center")),
+                           titlePanel(h2("California Groundwater Data", align = "center")),
                            fluidRow(column(br(),
                                            br(),
                                            tags$img(src="GAMAlogo.png",width="170"),
@@ -159,6 +159,90 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                                            width = 12)),
                            hr()
                   ),
+                  
+                  tabPanel("Groundwater level",fluid = TRUE, icon = icon("chart-area"),
+                           fluidRow(
+                             column(
+                               p("This tool explores groundwater levels evolution across California counties.
+              The interface allows the user to select county of interest.
+                The resulting figure explores monthly averages ground water levels of the selected county throughout time given the selected constraints.",
+                                 style="text-align:justify;color:black;padding:15px;border-radius:5px; width: 1250px; align: center"),
+                               width=4)
+                           ),
+                           sidebarLayout(
+                             sidebarPanel(
+                               "What do you want to represent?",
+                               br(),
+                               hr(),
+                               selectInput(inputId = "pick_county_evol",
+                                           label = "Select county",
+                                           choices = unique(water_level_ts$county_name),  # CHANGE VARIABLE NAME FOR COUNTIES
+                                           selected = "50 Free"
+                               ),  # End selectInput
+                               
+                               selectInput(inputId = "pick_use_evol",
+                                           label = "Select well use",
+                                           choices = unique(water_level_ts$well_use),  # CHANGE VARIABLE NAME FOR COUNTIES
+                                           selected = "50 Free"
+                               ),  # End selectInput
+                               
+                               sliderInput(inputId = "pick_range_evol",
+                                           label = "Time range",
+                                           min = min(water_level_ts$date),  # MAKE SURE THE DATE VARIABLE HAS THE SAME NAME. OTHERWISE YOU'LL HAVE TO CHANGE IT
+                                           max = max(water_level_ts$date),
+                                           value = c(min(water_level_ts$date),max(water_level_ts$date)),
+                                           timeFormat = "%m/%Y",
+                                           ticks = F
+                               ),  # End sliderInput
+                               
+                               checkboxInput("pick_trend","Include trend",FALSE
+                               ), # end checkbox
+                               
+                             ),  # End of sidebarPanel
+                             mainPanel(
+                               "Groundwater level evolution",
+                               
+                               tabsetPanel(
+                                 tabPanel("Original time series", plotOutput("gw_level_plot")), 
+                                 tabPanel("Seasonal", plotOutput("gw_level_seasonplot")),
+                                 tabPanel("Annual", plotOutput("gw_level_annualplot"))
+                               ) # End tabsetPanel
+                             )  # End of mainPanel
+                           )  # End of sidebarLayout
+                  ),  # End of tabPanel groundwater level evolution
+                  
+                  tabPanel("Groundwater map",fluid = TRUE, icon = icon("map"),
+                           fluidRow(
+                             column(
+                               p("This tool explores groundwater levels across California counties. 
+                               The interface allows the user to select the relevant well type and county of interest. 
+                               The resulting figure explores annual averages of the depth to water table throughout time given the selected constraints.",
+                                 style="text-align:justify;color:black;padding:15px;border-radius:5px; width: 1250px; align: center"),
+                               width=4)
+                           ),
+                           sidebarLayout(
+                             sidebarPanel(
+                               "What do you want to represent?",
+                               hr(),
+                               selectInput(inputId = "pick_well_map",
+                                           label = "Select Well Type",
+                                           choices = unique(combined_well_shiny_sf$well_type),
+                                           selected = "50 Free"
+                               ), # End selectInput
+                               
+                               selectInput(inputId = "pick_year_gw_map", 
+                                           label = ("Select Year"), 
+                                           choices = list("Year" = c(min(1950):max(combined_well_shiny_sf$year))),
+                                           selected = 1)
+                               
+                             ), # End of sidebarPanel
+                             mainPanel(
+                               column(
+                                 "California Counties Map",
+                                 tmapOutput(outputId = "gw_map_gw"), width = 8)
+                             ) # End of mainPanel
+                           ) # End of sidebarLayout
+                  ), # End of tabPanel
                   
                   tabPanel("Contaminant levels",fluid = TRUE, icon = icon("chart-area"),
                            fluidRow(
@@ -247,90 +331,6 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                            ) # End of sidebarLayout
                   ), # End of tabPanel map
                   
-                  tabPanel("Groundwater level",fluid = TRUE, icon = icon("chart-area"),
-                           fluidRow(
-                             column(
-                               p("This tool explores groundwater levels evolution across California counties.
-              The interface allows the user to select county of interest.
-                The resulting figure explores monthly averages ground water levels of the selected county throughout time given the selected constraints.",
-                                 style="text-align:justify;color:black;padding:15px;border-radius:5px; width: 1250px; align: center"),
-                               width=4)
-                           ),
-                           sidebarLayout(
-                             sidebarPanel(
-                               "What do you want to represent?",
-                               br(),
-                               hr(),
-                               selectInput(inputId = "pick_county_evol",
-                                           label = "Select county",
-                                           choices = unique(water_level_ts$county_name),  # CHANGE VARIABLE NAME FOR COUNTIES
-                                           selected = "50 Free"
-                               ),  # End selectInput
-                               
-                               selectInput(inputId = "pick_use_evol",
-                                           label = "Select well use",
-                                           choices = unique(water_level_ts$well_use),  # CHANGE VARIABLE NAME FOR COUNTIES
-                                           selected = "50 Free"
-                               ),  # End selectInput
-                               
-                               sliderInput(inputId = "pick_range_evol",
-                                           label = "Time range",
-                                           min = min(water_level_ts$date),  # MAKE SURE THE DATE VARIABLE HAS THE SAME NAME. OTHERWISE YOU'LL HAVE TO CHANGE IT
-                                           max = max(water_level_ts$date),
-                                           value = c(min(water_level_ts$date),max(water_level_ts$date)),
-                                           timeFormat = "%m/%Y",
-                                           ticks = F
-                               ),  # End sliderInput
-                               
-                               checkboxInput("pick_trend","Include trend",FALSE
-                               ), # end checkbox
-                               
-                             ),  # End of sidebarPanel
-                             mainPanel(
-                               "Groundwater level evolution",
-                               
-                               tabsetPanel(
-                                 tabPanel("Original time series", plotOutput("gw_level_plot")), 
-                                 tabPanel("Seasonal", plotOutput("gw_level_seasonplot")),
-                                 tabPanel("Annual", plotOutput("gw_level_annualplot"))
-                               ) # End tabsetPanel
-                             )  # End of mainPanel
-                           )  # End of sidebarLayout
-                  ),  # End of tabPanel groundwater level evolution
-                  
-                  tabPanel("Groundwater map",fluid = TRUE, icon = icon("map"),
-                           fluidRow(
-                             column(
-                               p("This tool explores groundwater levels across California counties. 
-                               The interface allows the user to select the relevant well type and county of interest. 
-                               The resulting figure explores annual averages of the depth to water table throughout time given the selected constraints.",
-                                 style="text-align:justify;color:black;padding:15px;border-radius:5px; width: 1250px; align: center"),
-                               width=4)
-                           ),
-                           sidebarLayout(
-                             sidebarPanel(
-                               "What do you want to represent?",
-                               hr(),
-                               selectInput(inputId = "pick_well_map",
-                                           label = "Select Well Type",
-                                           choices = unique(combined_well_shiny_sf$well_type),
-                                           selected = "50 Free"
-                               ), # End selectInput
-                               
-                               selectInput(inputId = "pick_year_gw_map", 
-                                           label = ("Select Year"), 
-                                           choices = list("Year" = c(min(1950):max(combined_well_shiny_sf$year))),
-                                           selected = 1)
-                               
-                             ), # End of sidebarPanel
-                             mainPanel(
-                               column(
-                                 "California Counties Map",
-                                 tmapOutput(outputId = "gw_map_gw"), width = 8)
-                             ) # End of mainPanel
-                           ) # End of sidebarLayout
-                  ), 
-                  
                   tabPanel("Contaminant Statistics", fluid = T, icon = icon("table"),
                            fluidRow(
                              p("This table shows general statistics for each pollutant in a selected county at any time range.",
@@ -364,19 +364,18 @@ To mitigate contamination, California sets standards for Maximum Contaminant Lev
                                                   selected = c("Bicarbonate Alkalinity", "Potassium", "Nitrate")
                                                   
                                ), # end checkboxGroup
-                               
-                               
                              ), # End of sidebarPanel
+ 
                              mainPanel(
                                column(
                                  "California Contaminant Statistics",
-                                 tableOutput(outputId ="gw_stat"), width = 8
-                               ) # End of mainPanel
-                             ) # End of sidebarLayout
+                                 tableOutput(outputId ="gw_stat"), width = 8) 
+                             ) # End of mainPanel
+                             )# End of sidebarLayout
                            ) # End of tabPanel statistics
                            
-                  ) # End of tabPanel
-                ) #end of navbarPage
+                          
+                  ) #end of navbarPage
 )
 
 ## Start of the server
@@ -504,7 +503,7 @@ server <- function(input,output) {
     tm_shape(shp = map_reactive_con()) +
       tm_borders(col = 'gray') +
       tm_fill(col = 'mean_gm_result',
-              title = "Mean Contaminant Concentration",
+              title = "Mean Concentration (mg/l)",
               style = 'cont',
               popup.vars = c("Population in Poverty (2019)"="povall_2019","Percent of Population in Poverty (2019)"="pctpovall_2019"),
               popup.format = list()) 
