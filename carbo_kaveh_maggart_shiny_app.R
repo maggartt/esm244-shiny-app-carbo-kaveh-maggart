@@ -107,7 +107,6 @@ my_theme <- bs_theme(
 ui <- fluidPage(theme=my_theme,
                 navbarPage(
                   "Groundwater California",  # Title
-                  
                   tabPanel("Home",fluid = TRUE, icon = icon("home"),
                            titlePanel(h2("California Groundwater Data", align = "center")),
                            fluidRow(column(br(),
